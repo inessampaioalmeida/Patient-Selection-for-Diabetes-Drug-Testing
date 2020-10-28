@@ -3,7 +3,7 @@ import numpy as np
 import os
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-
+import functools
 
 ####### STUDENTS FILL THIS OUT ######
 #Question 3
@@ -28,7 +28,6 @@ def select_first_encounter(df):
     return:
         - first_encounter_df: pandas dataframe, dataframe with only the first encounter for a given patient
     '''
-  
     
     return df.sort_values(['encounter_id'], ascending=True).groupby('patient_nbr').head(1)
 
@@ -45,8 +44,15 @@ def patient_dataset_splitter(df, patient_key='patient_nbr'):
      - test: pandas dataframe,
     '''
     
-    train, aux = train_test_split(df, test_size=0.4, random_state=1)
-    validation, test = train_test_split(aux, test_size=0.5, random_state=1)
+    train, aux = train_test_split(
+        df, 
+        test_size=0.4, 
+        random_state=1)
+    
+    validation, test = train_test_split(
+        aux, 
+        test_size=0.5, 
+        random_state=1)
 
     return train, validation, test
 
@@ -69,8 +75,28 @@ def create_tf_categorical_feature_cols(categorical_col_list,
         tf_categorical_feature_column = tf.feature_column.......
 
         '''
-        output_tf_list.append(tf_categorical_feature_column)
+        
+        output_tf_list = []
+        for c in categorical_col_list:
+            vocab_file_path = os.path.join(vocab_dir,  c + "_vocab.txt")
+            
+            tf_categorical_feature_column = tf.feature_column.categorical_column_with_vocabulary_file(
+                key = c, 
+                vocabulary_file = vocab_file_path,
+                num_oov_buckets=0)
+            
+            if c == 'primary_diagnosis_code':
+                cat_col = tf.feature_column.embedding_column(
+                    tf_categorical_feature_column, 
+                    dimension=10)        
+            else:
+                cat_col = tf.feature_column.indicator_column(
+                    tf_categorical_feature_column)
+            
+            output_tf_list.append(cat_col)
+            
     return output_tf_list
+        
 
 #Question 8
 def normalize_numeric_with_zscore(col, mean, std):
@@ -91,6 +117,18 @@ def create_tf_numeric_feature(col, MEAN, STD, default_value=0):
     return:
         tf_numeric_feature: tf feature column representation of the input field
     '''
+    
+    normalizer = functools.partial(
+        normalize_numeric_with_zscore,
+        mean=MEAN,
+        std=STD)
+    
+    tf_numeric_feature = tf.feature_column.numeric_column(
+        col, 
+        normalizer_fn=normalizer, 
+        default_value=default_value
+    )
+
     return tf_numeric_feature
 
 #Question 9
@@ -98,8 +136,9 @@ def get_mean_std_from_preds(diabetes_yhat):
     '''
     diabetes_yhat: TF Probability prediction object
     '''
-    m = '?'
-    s = '?'
+    m = diabetes_yhat.mean()
+    s = diabetes_yhat.stddev()
+    
     return m, s
 
 # Question 10
@@ -110,4 +149,6 @@ def get_student_binary_prediction(df, col):
     return:
         student_binary_prediction: pandas dataframe converting input to flattened numpy array and binary labels
     '''
+    student_binary_prediction = df[col].apply(lambda x: 1 if x>5 else 0)
+    
     return student_binary_prediction
